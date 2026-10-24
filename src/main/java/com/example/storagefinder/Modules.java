@@ -2,6 +2,8 @@ package com.example.storagefinder;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -13,6 +15,9 @@ import java.util.List;
 import java.util.Properties;
 
 public final class Modules {
+
+    /** Redstone Optimizer switches use this category. They show on that page, not in the sidebar. */
+    public static final String OPTIMIZER_CATEGORY = "Optimizer";
 
     public abstract static class Module {
         private final String name;
@@ -47,10 +52,49 @@ public final class Modules {
         }
     }
 
+    /** Leaves a particle trail behind you while you move. Only you can see it. */
+    public static final class Trail extends Module {
+        private int ticks = 0;
+
+        public Trail() {
+            super("Trail", "Render");
+        }
+
+        @Override
+        public void tick(Minecraft mc) {
+            if (mc.player == null || mc.level == null) return;
+            Vec3 motion = mc.player.getDeltaMovement();
+            boolean moving = motion.x * motion.x + motion.z * motion.z > 0.001;
+            if (!moving) return;
+            ticks++;
+            if (ticks % 2 != 0) return;
+            mc.level.addParticle(ParticleTypes.END_ROD,
+                    mc.player.getX(), mc.player.getY() + 0.1, mc.player.getZ(),
+                    0, 0, 0);
+        }
+    }
+
+    /** A Redstone Optimizer switch. Its hiding code will read isEnabled(). */
+    public static final class OptimizerOption extends Module {
+        public OptimizerOption(String name) {
+            super(name, OPTIMIZER_CATEGORY);
+        }
+    }
+
     public static final List<Module> ALL = new ArrayList<>();
+
+    public static final OptimizerOption DISABLE_REDSTONE_DUST = new OptimizerOption("Disable Redstone Dust");
+    public static final OptimizerOption HIDE_PISTON = new OptimizerOption("Hide Piston");
+    public static final OptimizerOption HIDE_TNT_EXPLOSION = new OptimizerOption("Hide TNT Explosion");
+    public static final OptimizerOption HIDE_DROPPED_ITEMS = new OptimizerOption("Hide Dropped Items");
 
     static {
         ALL.add(new AutoSprint());
+        ALL.add(new Trail());
+        ALL.add(DISABLE_REDSTONE_DUST);
+        ALL.add(HIDE_PISTON);
+        ALL.add(HIDE_TNT_EXPLOSION);
+        ALL.add(HIDE_DROPPED_ITEMS);
     }
 
     private Modules() {}
