@@ -24,14 +24,6 @@ public class FinderScreen extends Screen {
 
     private static final String OPTIMIZER = "Redstone Optimizer";
 
-    // Options inside Redstone Optimizer. These only change what you see.
-    private static final String[][] OPTIMIZER_ITEMS = {
-            {"Disable Redstone Dust", "Hides redstone dust in your view. Circuits still work."},
-            {"Hide Piston", "Hides piston movement in your view. Pistons still move."},
-            {"Hide TNT Explosion", "Hides the blast. Ignited TNT stays visible with a fuse timer."},
-            {"Hide Dropped Items", "Hides dropped items in your view. The items still exist."}
-    };
-
     private static final int SIDEBAR_W = 150;
     private static final int HEADER_H = 50;
     private static final int ROW_H = 36;
@@ -115,9 +107,11 @@ public class FinderScreen extends Screen {
         int y = winY + HEADER_H;
 
         if (optimizerOpen) {
-            for (String[] item : OPTIMIZER_ITEMS) {
-                rows.add(new Row(new Box(x, y, w, ROW_H), item[0], item[1], null, false));
-                y += ROW_H + ROW_GAP;
+            for (Modules.Module m : Modules.ALL) {
+                if (Modules.OPTIMIZER_CATEGORY.equals(m.category())) {
+                    rows.add(new Row(new Box(x, y, w, ROW_H), m.name(), describe(m.name()), m, false));
+                    y += ROW_H + ROW_GAP;
+                }
             }
             return;
         }
@@ -130,7 +124,10 @@ public class FinderScreen extends Screen {
             }
         }
         if (category.equals("Render")) {
-            rows.add(new Row(new Box(x, y, w, ROW_H), OPTIMIZER, "Right-click to open", null, true));
+            String summary = "Right-click to open. "
+                    + count(Modules.OPTIMIZER_CATEGORY, true) + " of "
+                    + count(Modules.OPTIMIZER_CATEGORY, false) + " on";
+            rows.add(new Row(new Box(x, y, w, ROW_H), OPTIMIZER, summary, null, true));
             y += ROW_H + ROW_GAP;
         }
         for (String name : COMING_SOON[selected]) {
@@ -143,29 +140,26 @@ public class FinderScreen extends Screen {
         return switch (name) {
             case "Auto Sprint" -> "Keeps you sprinting while you move forward.";
             case "Trail" -> "Particle trail behind you. Only you see it.";
+            case "Disable Redstone Dust" -> "Hides redstone dust in your view. Circuits still work.";
+            case "Hide Piston" -> "Hides piston movement in your view. Pistons still move.";
+            case "Hide TNT Explosion" -> "Hides the blast. Ignited TNT stays visible with a fuse timer.";
+            case "Hide Dropped Items" -> "Hides dropped items in your view. The items still exist.";
             default -> "";
         };
     }
 
-    private static int moduleCount(String category) {
+    // Counts modules in a category, optionally only the enabled ones.
+    private static int count(String category, boolean enabledOnly) {
         int n = 0;
         for (Modules.Module m : Modules.ALL) {
-            if (m.category().equals(category)) n++;
-        }
-        return n;
-    }
-
-    private static int enabledCount(String category) {
-        int n = 0;
-        for (Modules.Module m : Modules.ALL) {
-            if (m.category().equals(category) && m.isEnabled()) n++;
+            if (m.category().equals(category) && (!enabledOnly || m.isEnabled())) n++;
         }
         return n;
     }
 
     private static int totalCount(int index) {
         String c = CATEGORIES[index];
-        int n = moduleCount(c) + COMING_SOON[index].length;
+        int n = count(c, false) + COMING_SOON[index].length;
         return c.equals("Render") ? n + 1 : n;
     }
 
@@ -267,12 +261,14 @@ public class FinderScreen extends Screen {
             rounded(g, bb.x(), bb.y(), bb.w(), bb.h(), 6, bb.contains(mouseX, mouseY) ? ROW_HOVER : ROW_BG);
             g.text(this.font, "< Back", bb.x() + 8, bb.y() + 5, TEXT, false);
             g.text(this.font, OPTIMIZER, mx + 66, winY + 14, ACCENT_TEXT, false);
-            g.text(this.font, "Client-side only. Other players still see everything.", mx, winY + 34, TEXT_DIM, false);
+            g.text(this.font, count(Modules.OPTIMIZER_CATEGORY, true) + " of "
+                    + count(Modules.OPTIMIZER_CATEGORY, false) + " on. Hiding effects come later.",
+                    mx, winY + 31, TEXT_DIM, false);
         } else {
             String category = CATEGORIES[selected];
             g.text(this.font, category + " Modules", mx, winY + 12, ACCENT_TEXT, false);
-            g.text(this.font, plural(moduleCount(category), "module") + ", "
-                    + enabledCount(category) + " enabled", mx, winY + 26, TEXT_DIM, false);
+            g.text(this.font, plural(count(category, false), "module") + ", "
+                    + count(category, true) + " enabled", mx, winY + 26, TEXT_DIM, false);
         }
 
         Box sb = searchBox;
@@ -296,7 +292,9 @@ public class FinderScreen extends Screen {
             g.text(this.font, ">", b.x() + b.w() - 16, b.y() + 13, TEXT_DIM, false);
         } else if (r.module() != null) {
             boolean on = r.module().isEnabled();
-            g.text(this.font, ">", b.x() + b.w() - 56, b.y() + 13, TEXT_DIM, false);
+            if (!Modules.OPTIMIZER_CATEGORY.equals(r.module().category())) {
+                g.text(this.font, ">", b.x() + b.w() - 56, b.y() + 13, TEXT_DIM, false);
+            }
             int trackX = b.x() + b.w() - 30;
             int trackY = b.y() + 13;
             rounded(g, trackX, trackY, 22, 10, 5, on ? ACCENT : TOGGLE_OFF);
