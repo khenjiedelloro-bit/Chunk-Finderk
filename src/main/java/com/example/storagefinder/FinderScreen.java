@@ -5,77 +5,75 @@ import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-import java.util.List;
-
 public class FinderScreen extends Screen {
-    private Button finderButton;
-    private Button hopperButton;
-    private StringWidget summary;
-    private final StringWidget[] rows = new StringWidget[6];
-    private int refresh = 0;
+    private static final String[] CATEGORIES = {"Movement", "Render", "World", "Player", "Misc"};
+    private static final String[][] COMING_SOON = {
+            {},
+            {"Farm Timer", "Viewmodel", "Capes", "Hats", "Totem Counter"},
+            {"Chunk Border"},
+            {"Coordinates", "Armor Display"},
+            {}
+    };
+    private static final int COLUMN_WIDTH = 120;
+    private static final int GAP = 6;
 
     public FinderScreen() {
-        super(Component.literal("Storage Finder"));
+        super(Component.literal("Polute Client"));
     }
 
     @Override
     protected void init() {
-        int cx = this.width / 2;
-        int y = this.height / 4;
+        int totalWidth = CATEGORIES.length * COLUMN_WIDTH + (CATEGORIES.length - 1) * GAP;
+        int left = this.width / 2 - totalWidth / 2;
+        int top = this.height / 4;
 
-        addRenderableWidget(new StringWidget(cx - 100, y - 24, 200, 12, this.title, this.font));
+        addRenderableWidget(new StringWidget(left, top - 24, totalWidth, 12, this.title, this.font));
 
-        finderButton = addRenderableWidget(Button.builder(finderLabel(), b -> {
-            StorageScanner.enabled = !StorageScanner.enabled;
-            b.setMessage(finderLabel());
-        }).bounds(cx - 100, y, 200, 20).build());
+        for (int c = 0; c < CATEGORIES.length; c++) {
+            String category = CATEGORIES[c];
+            int x = left + c * (COLUMN_WIDTH + GAP);
+            int y = top;
 
-        hopperButton = addRenderableWidget(Button.builder(hopperLabel(), b -> {
-            StorageScanner.includeHoppers = !StorageScanner.includeHoppers;
-            b.setMessage(hopperLabel());
-        }).bounds(cx - 100, y + 24, 200, 20).build());
+            addRenderableWidget(new StringWidget(x, y, COLUMN_WIDTH, 12,
+                    Component.literal(category), this.font));
+            y += 18;
 
-        summary = addRenderableWidget(new StringWidget(cx - 100, y + 52, 200, 12, Component.empty(), this.font));
-        for (int i = 0; i < rows.length; i++) {
-            rows[i] = addRenderableWidget(new StringWidget(cx - 100, y + 68 + i * 12, 200, 12, Component.empty(), this.font));
-        }
-
-        addRenderableWidget(Button.builder(Component.literal("Close"), b -> onClose())
-                .bounds(cx - 50, y + 68 + rows.length * 12 + 8, 100, 20).build());
-        updateText();
-    }
-
-    @Override
-    public void tick() {
-        if (++refresh % 10 == 0) updateText();
-    }
-
-    private void updateText() {
-        List<StorageScanner.Hit> hits = StorageScanner.hits;
-        if (!StorageScanner.enabled) {
-            summary.setMessage(Component.literal("Finder is off."));
-        } else {
-            summary.setMessage(Component.literal("Chunks with storage: " + hits.size()));
-        }
-        for (int i = 0; i < rows.length; i++) {
-            if (StorageScanner.enabled && i < hits.size()) {
-                var h = hits.get(i);
-                rows[i].setMessage(Component.literal(
-                        "Chunk " + h.pos().x() + ", " + h.pos().z()
-                                + "  (block " + h.pos().getMinBlockX() + ", " + h.pos().getMinBlockZ()
-                                + ")  x" + h.count()));
-            } else {
-                rows[i].setMessage(Component.empty());
+            for (Modules.Module m : Modules.ALL) {
+                if (m.category().equals(category)) {
+                    addRenderableWidget(moduleButton(m, x, y));
+                    y += 24;
+                }
+            }
+            for (String name : COMING_SOON[c]) {
+                addRenderableWidget(new StringWidget(x, y, COLUMN_WIDTH, 12,
+                        Component.literal(name + " (soon)"), this.font));
+                y += 14;
+            }
+            if (category.equals("Misc")) {
+                addRenderableWidget(Button.builder(Component.literal("Save settings"), b -> Modules.save())
+                        .bounds(x, y, COLUMN_WIDTH, 20).build());
+                y += 24;
+                addRenderableWidget(Button.builder(Component.literal("Close"), b -> onClose())
+                        .bounds(x, y, COLUMN_WIDTH, 20).build());
             }
         }
     }
 
-    private Component finderLabel() {
-        return Component.literal("Chunk Finder: " + (StorageScanner.enabled ? "ON" : "OFF"));
+    private Button moduleButton(Modules.Module m, int x, int y) {
+        return Button.builder(moduleLabel(m), b -> {
+            m.toggle();
+            b.setMessage(moduleLabel(m));
+        }).bounds(x, y, COLUMN_WIDTH, 20).build();
     }
 
-    private Component hopperLabel() {
-        return Component.literal("Include hoppers/dispensers: " + (StorageScanner.includeHoppers ? "ON" : "OFF"));
+    private static Component moduleLabel(Modules.Module m) {
+        return Component.literal(m.name() + ": " + (m.isEnabled() ? "ON" : "OFF"));
+    }
+
+    @Override
+    public void onClose() {
+        Modules.save();
+        super.onClose();
     }
 
     @Override
