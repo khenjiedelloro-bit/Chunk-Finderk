@@ -2,8 +2,10 @@
   "schemaVersion": 1,
   "id": "storagefinder",
   "version": "${version}",
-  "name": "Storage Chunk Finder",
-  "description": "Toggleable menu with a chunk finder that highlights chunks containing storage blocks.",
+  "name": "PoluteTion",
+  "description": "A optimization mod,reduces particles made by player",
+  "authors": ["ManeRism"],
+  "icon": "assets/storagefinder/icon.png",
   "environment": "client",
   "entrypoints": { "client": ["com.example.storagefinder.StorageFinderClient"] },
   "depends": {
