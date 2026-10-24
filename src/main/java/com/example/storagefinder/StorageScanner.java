@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.entity.DispenserBlockEntity;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 import java.util.ArrayList;
@@ -57,8 +58,8 @@ public final class StorageScanner {
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
                 int cx = center.x() + dx, cz = center.z() + dz;
-                ChunkAccess chunk = level.getChunk(cx, cz, ChunkStatus.FULL, false);
-                if (chunk == null) continue;
+                ChunkAccess access = level.getChunk(cx, cz, ChunkStatus.FULL, false);
+                if (!(access instanceof LevelChunk chunk)) continue;
                 int count = 0;
                 for (Map.Entry<BlockPos, BlockEntity> e : chunk.getBlockEntities().entrySet()) {
                     if (isStorage(e.getValue())) count++;
