@@ -24,8 +24,8 @@ public class StorageFinderClient implements ClientModInitializer {
 
     private void onTick(Minecraft mc) {
         while (menuKey.consumeClick()) {
-            if (mc.level != null && mc.screen == null) {
-                mc.setScreen(new FinderScreen());
+            if (mc.level != null && mc.gui.screen() == null) {
+                mc.gui.setScreen(new FinderScreen());
             }
         }
         StorageScanner.tick(mc);
