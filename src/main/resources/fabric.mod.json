@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "storagefinder",
+  "version": "${version}",
+  "name": "Storage Chunk Finder",
+  "description": "Toggleable menu with a chunk finder that highlights chunks containing storage blocks.",
+  "environment": "client",
+  "entrypoints": { "client": ["com.example.storagefinder.StorageFinderClient"] },
+  "depends": {
+    "fabricloader": ">=0.19.1",
+    "minecraft": ">=26.2-",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
