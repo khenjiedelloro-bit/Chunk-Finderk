@@ -1,0 +1,57 @@
+name: Dump 26.2 API
+on:
+  workflow_dispatch:
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 9.3.0
+      - run: gradle compileJava --no-daemon
+      - name: Dump API names
+        run: |
+          mkdir -p api-dump
+          find "$HOME/.gradle" -name "*.jar" > api-dump/jars.txt
+          MC_JAR=""
+          FABRIC_JAR=""
+          while read -r JAR; do
+            if [ -z "$MC_JAR" ] && unzip -l "$JAR" 2>/dev/null | grep -q "net/minecraft/client/gui/GuiGraphicsExtractor.class"; then
+              MC_JAR="$JAR"
+            fi
+            if [ -z "$FABRIC_JAR" ] && unzip -l "$JAR" 2>/dev/null | grep -q "rendering/v1/level/LevelRenderEvents.class"; then
+              FABRIC_JAR="$JAR"
+            fi
+          done < api-dump/jars.txt
+          echo "Minecraft jar: $MC_JAR" > api-dump/info.txt
+          echo "Fabric API jar: $FABRIC_JAR" >> api-dump/info.txt
+          CP="$MC_JAR:$FABRIC_JAR"
+          for C in \
+            net.minecraft.client.gui.GuiGraphicsExtractor \
+            net.minecraft.client.gui.screens.Screen \
+            net.minecraft.client.input.MouseButtonEvent \
+            net.minecraft.client.renderer.LevelRenderer \
+            net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents \
+            net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext; do
+            echo "== $C" >> api-dump/signatures.txt
+            javap -cp "$CP" -public "$C" >> api-dump/signatures.txt 2>&1 || true
+          done
+          if [ -n "$MC_JAR" ]; then
+            unzip -l "$MC_JAR" | grep -E "Cape|Elytra|Avatar|PlayerRenderer|PlayerModel|RenderType|ItemInHand|FeatureRenderer|Layer" > api-dump/mc-names.txt || true
+          fi
+          while read -r JAR; do
+            case "$JAR" in
+              *fabric-rendering*|*fabric-api*)
+                unzip -l "$JAR" 2>/dev/null | grep -E "FeatureRenderer|Living|Registration|/level/" | sed "s|^|$(basename "$JAR"): |" || true
+                ;;
+            esac
+          done < api-dump/jars.txt > api-dump/fabric-names.txt || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-dump
+          path: api-dump/
