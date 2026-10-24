@@ -4,7 +4,7 @@ plugins {
 
 version = project.mod_version
 group = 'com.example'
-base { archivesName = 'storage-finder' }
+base { archivesName = 'Pullution-Client' }
 
 repositories { mavenCentral() }
 
