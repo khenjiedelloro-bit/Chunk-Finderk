@@ -16,9 +16,9 @@ public class StorageFinderClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        Modules.load();
         menuKey = KeyMappingHelper.registerKeyMapping(
                 new KeyMapping("key.storagefinder.menu", GLFW.GLFW_KEY_RIGHT_SHIFT, CATEGORY));
-
         ClientTickEvents.END_CLIENT_TICK.register(this::onTick);
     }
 
@@ -28,6 +28,10 @@ public class StorageFinderClient implements ClientModInitializer {
                 mc.gui.setScreen(new FinderScreen());
             }
         }
-        StorageScanner.tick(mc);
+        if (mc.level != null && mc.player != null) {
+            for (Modules.Module m : Modules.ALL) {
+                if (m.isEnabled()) m.tick(mc);
+            }
+        }
     }
 }
