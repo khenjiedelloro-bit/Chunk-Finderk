@@ -10,37 +10,28 @@ import java.util.List;
 
 public class FinderScreen extends Screen {
 
-    // Sidebar sections. Combat, Mace and Spear are left out on purpose.
+    private static final String BRAND = "LuffyEssentials";
     private static final String[] CATEGORIES = {"Movement", "Render", "World", "Player", "Misc"};
-
-    // Planned modules that aren't built yet, in the same order as CATEGORIES.
-    private static final String[][] COMING_SOON = {
-            {},
-            {"Farm Timer", "Viewmodel", "Capes", "Hats", "Totem Counter"},
-            {"Chunk Border"},
-            {"Coordinates", "Armor Display"},
-            {}
-    };
-
-    private static final String OPTIMIZER = "Redstone Optimizer";
 
     private static final int SIDEBAR_W = 150;
     private static final int HEADER_H = 50;
     private static final int ROW_H = 36;
     private static final int ROW_GAP = 4;
+    private static final int EDITOR_ROWS_Y = 66;   // where colour rows start, relative to the window top
+    private static final int CHANNEL_STEP = 16;
 
-    // Purple theme (ARGB)
-    private static final int WINDOW_BG = 0xF2120E1A;
-    private static final int SIDEBAR_BG = 0xFF181126;
-    private static final int ROW_BG = 0xFF1F1836;
-    private static final int ROW_HOVER = 0xFF2A2148;
-    private static final int ROW_DIM = 0xFF161129;
-    private static final int SELECTED_BG = 0xFF33235A;
-    private static final int ACCENT = 0xFFA25CFF;
-    private static final int ACCENT_TEXT = 0xFFC9A6FF;
-    private static final int TEXT = 0xFFEDE7FF;
-    private static final int TEXT_DIM = 0xFF8E84A8;
-    private static final int TOGGLE_OFF = 0xFF3A3150;
+    // Purple theme (ARGB), brighter than before
+    private static final int WINDOW_BG = 0xF21A0633;
+    private static final int SIDEBAR_BG = 0xFF230A44;
+    private static final int ROW_BG = 0xFF2C1357;
+    private static final int ROW_HOVER = 0xFF3D1C75;
+    private static final int BUTTON_BG = 0xFF4A1F8F;
+    private static final int SELECTED_BG = 0xFF5A24B0;
+    private static final int ACCENT = 0xFFB52EFF;
+    private static final int ACCENT_TEXT = 0xFFE3B3FF;
+    private static final int TEXT = 0xFFF5EEFF;
+    private static final int TEXT_DIM = 0xFFA88AD6;
+    private static final int TOGGLE_OFF = 0xFF4A2F7A;
     private static final int KNOB = 0xFFFFFFFF;
 
     private record Box(int x, int y, int w, int h) {
@@ -51,26 +42,27 @@ public class FinderScreen extends Screen {
 
     private record Action(Box box, String label, Runnable action) {}
 
-    private record Row(Box box, String name, String description, Modules.Module module, boolean opensOptimizer) {}
+    // A row is either a module (module != null) or one colour channel while editing (channel != '\0').
+    private record Row(Box box, String name, String description, Modules.Module module, char channel) {}
 
     private final List<Box> categoryBoxes = new ArrayList<>();
     private final List<Action> actions = new ArrayList<>();
     private final List<Row> rows = new ArrayList<>();
     private int selected = 0;
-    private boolean optimizerOpen = false;
+    private Modules.ColorModule editing = null;
 
     private int winX, winY, winW, winH;
     private Box backBox;
     private Box searchBox;
 
     public FinderScreen() {
-        super(Component.literal("Pollution Client"));
+        super(Component.literal(BRAND));
     }
 
     @Override
     protected void init() {
-        winW = Math.min(this.width - 16, 540);
-        winH = Math.min(this.height - 16, 360);
+        winW = Math.min(this.width - 16, 560);
+        winH = Math.min(this.height - 16, 380);
         winX = (this.width - winW) / 2;
         winY = (this.height - winH) / 2;
 
@@ -104,46 +96,32 @@ public class FinderScreen extends Screen {
         rows.clear();
         int x = mainX();
         int w = mainW();
-        int y = winY + HEADER_H;
 
-        if (optimizerOpen) {
-            for (Modules.Module m : Modules.ALL) {
-                if (Modules.OPTIMIZER_CATEGORY.equals(m.category())) {
-                    rows.add(new Row(new Box(x, y, w, ROW_H), m.name(), describe(m.name()), m, false));
-                    y += ROW_H + ROW_GAP;
-                }
-            }
+        if (editing != null) {
+            int y = winY + EDITOR_ROWS_Y;
+            rows.add(new Row(new Box(x, y, w, ROW_H), "Red", "", null, 'r'));
+            y += ROW_H + ROW_GAP;
+            rows.add(new Row(new Box(x, y, w, ROW_H), "Green", "", null, 'g'));
+            y += ROW_H + ROW_GAP;
+            rows.add(new Row(new Box(x, y, w, ROW_H), "Blue", "", null, 'b'));
             return;
         }
 
+        int y = winY + HEADER_H;
         String category = CATEGORIES[selected];
         for (Modules.Module m : Modules.ALL) {
             if (m.category().equals(category)) {
-                rows.add(new Row(new Box(x, y, w, ROW_H), m.name(), describe(m.name()), m, false));
+                rows.add(new Row(new Box(x, y, w, ROW_H), m.name(), describe(m.name()), m, '\0'));
                 y += ROW_H + ROW_GAP;
             }
-        }
-        if (category.equals("Render")) {
-            String summary = "Right-click to open. "
-                    + count(Modules.OPTIMIZER_CATEGORY, true) + " of "
-                    + count(Modules.OPTIMIZER_CATEGORY, false) + " on";
-            rows.add(new Row(new Box(x, y, w, ROW_H), OPTIMIZER, summary, null, true));
-            y += ROW_H + ROW_GAP;
-        }
-        for (String name : COMING_SOON[selected]) {
-            rows.add(new Row(new Box(x, y, w, ROW_H), name, "Coming soon", null, false));
-            y += ROW_H + ROW_GAP;
         }
     }
 
     private static String describe(String name) {
         return switch (name) {
             case "Auto Sprint" -> "Keeps you sprinting while you move forward.";
-            case "Trail" -> "Particle trail behind you. Only you see it.";
-            case "Disable Redstone Dust" -> "Hides redstone dust in your view. Circuits still work.";
-            case "Hide Piston" -> "Hides piston movement in your view. Pistons still move.";
-            case "Hide TNT Explosion" -> "Hides the blast. Ignited TNT stays visible with a fuse timer.";
-            case "Hide Dropped Items" -> "Hides dropped items in your view. The items still exist.";
+            case "Saturation Color" -> "Tints your screen with a faint colour. Effect comes next.";
+            case "Glowing Hand" -> "Glows the item in your hand. Effect comes next.";
             default -> "";
         };
     }
@@ -157,14 +135,24 @@ public class FinderScreen extends Screen {
         return n;
     }
 
-    private static int totalCount(int index) {
-        String c = CATEGORIES[index];
-        int n = count(c, false) + COMING_SOON[index].length;
-        return c.equals("Render") ? n + 1 : n;
-    }
-
     private static String plural(int n, String word) {
         return n + " " + word + (n == 1 ? "" : "s");
+    }
+
+    private static String channelName(char c) {
+        return switch (c) {
+            case 'r' -> "Red";
+            case 'g' -> "Green";
+            default -> "Blue";
+        };
+    }
+
+    private int channelValue(char c) {
+        return switch (c) {
+            case 'r' -> editing.red();
+            case 'g' -> editing.green();
+            default -> editing.blue();
+        };
     }
 
     // Draws a rectangle with rounded corners using fills only.
@@ -220,6 +208,18 @@ public class FinderScreen extends Screen {
         g.fill(x, y + 7, x + 10, y + 9, c);
     }
 
+    // Draws the brand name with each letter bobbing up and down.
+    private void drawTitle(GuiGraphicsExtractor g) {
+        long t = System.currentTimeMillis();
+        int x = winX + 14;
+        for (int i = 0; i < BRAND.length(); i++) {
+            String letter = String.valueOf(BRAND.charAt(i));
+            int wave = (int) Math.round(Math.sin(t / 200.0 + i * 0.6) * 2.0);
+            g.text(this.font, letter, x, winY + 12 + wave, ACCENT_TEXT, false);
+            x += this.font.width(letter);
+        }
+    }
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
         super.extractRenderState(g, mouseX, mouseY, delta);
@@ -228,8 +228,8 @@ public class FinderScreen extends Screen {
         rounded(g, winX, winY, winW, winH, 12, WINDOW_BG);
         rounded(g, winX + 4, winY + 4, SIDEBAR_W - 8, winH - 8, 10, SIDEBAR_BG);
 
-        g.text(this.font, "Pollution Client", winX + 14, winY + 12, ACCENT_TEXT, false);
-        g.text(this.font, "BETA RELEASE 1.0", winX + 14, winY + 24, TEXT_DIM, false);
+        drawTitle(g);
+        g.text(this.font, "BETA RELEASE 1.0", winX + 14, winY + 26, TEXT_DIM, false);
         g.text(this.font, "MODULES", winX + 14, winY + 42, TEXT_DIM, false);
 
         for (int i = 0; i < CATEGORIES.length; i++) {
@@ -243,7 +243,8 @@ public class FinderScreen extends Screen {
             }
             drawIcon(g, i, b.x() + 8, b.y() + 6, isSelected ? ACCENT : TEXT_DIM);
             g.text(this.font, CATEGORIES[i], b.x() + 24, b.y() + 7, isSelected ? ACCENT_TEXT : TEXT, false);
-            g.text(this.font, String.valueOf(totalCount(i)), b.x() + b.w() - 14, b.y() + 7, TEXT_DIM, false);
+            g.text(this.font, String.valueOf(count(CATEGORIES[i], false)), b.x() + b.w() - 14, b.y() + 7,
+                    TEXT_DIM, false);
         }
 
         g.text(this.font, "GENERAL", winX + 14, winY + winH - 74, TEXT_DIM, false);
@@ -256,14 +257,16 @@ public class FinderScreen extends Screen {
 
         // Main area
         int mx = mainX();
-        if (optimizerOpen) {
+        if (editing != null) {
             Box bb = backBox;
             rounded(g, bb.x(), bb.y(), bb.w(), bb.h(), 6, bb.contains(mouseX, mouseY) ? ROW_HOVER : ROW_BG);
             g.text(this.font, "< Back", bb.x() + 8, bb.y() + 5, TEXT, false);
-            g.text(this.font, OPTIMIZER, mx + 66, winY + 14, ACCENT_TEXT, false);
-            g.text(this.font, count(Modules.OPTIMIZER_CATEGORY, true) + " of "
-                    + count(Modules.OPTIMIZER_CATEGORY, false) + " on. Hiding effects come later.",
-                    mx, winY + 31, TEXT_DIM, false);
+            g.text(this.font, editing.name(), mx + 66, winY + 14, ACCENT_TEXT, false);
+            g.text(this.font, "Click + or - to change each colour. Saves automatically.", mx, winY + 30,
+                    TEXT_DIM, false);
+            int py = winY + 44;
+            rounded(g, mx, py, mainW(), 14, 6, editing.argb());
+            g.text(this.font, String.format("#%06X", editing.argb() & 0xFFFFFF), mx + 6, py + 3, TEXT, true);
         } else {
             String category = CATEGORIES[selected];
             g.text(this.font, category + " Modules", mx, winY + 12, ACCENT_TEXT, false);
@@ -275,6 +278,9 @@ public class FinderScreen extends Screen {
         rounded(g, sb.x(), sb.y(), sb.w(), sb.h(), 6, ROW_BG);
         g.text(this.font, "Search modules", sb.x() + 8, sb.y() + 6, TEXT_DIM, false);
 
+        if (editing == null && rows.isEmpty()) {
+            g.text(this.font, "No modules here yet.", mx, winY + HEADER_H + 4, TEXT_DIM, false);
+        }
         for (Row r : rows) {
             drawRow(g, r, mouseX, mouseY);
         }
@@ -283,23 +289,57 @@ public class FinderScreen extends Screen {
     private void drawRow(GuiGraphicsExtractor g, Row r, int mouseX, int mouseY) {
         Box b = r.box();
         boolean hovered = b.contains(mouseX, mouseY);
-        boolean dim = r.module() == null && !r.opensOptimizer();
-        rounded(g, b.x(), b.y(), b.w(), b.h(), 8, dim ? ROW_DIM : (hovered ? ROW_HOVER : ROW_BG));
-        g.text(this.font, r.name(), b.x() + 10, b.y() + 7, dim ? TEXT_DIM : TEXT, false);
+        rounded(g, b.x(), b.y(), b.w(), b.h(), 8, hovered ? ROW_HOVER : ROW_BG);
+
+        if (r.channel() != '\0') {
+            drawChannelRow(g, r, mouseX, mouseY);
+            return;
+        }
+
+        g.text(this.font, r.name(), b.x() + 10, b.y() + 7, TEXT, false);
         g.text(this.font, r.description(), b.x() + 10, b.y() + 19, TEXT_DIM, false);
 
-        if (r.opensOptimizer()) {
-            g.text(this.font, ">", b.x() + b.w() - 16, b.y() + 13, TEXT_DIM, false);
-        } else if (r.module() != null) {
-            boolean on = r.module().isEnabled();
-            if (!Modules.OPTIMIZER_CATEGORY.equals(r.module().category())) {
-                g.text(this.font, ">", b.x() + b.w() - 56, b.y() + 13, TEXT_DIM, false);
-            }
-            int trackX = b.x() + b.w() - 30;
-            int trackY = b.y() + 13;
-            rounded(g, trackX, trackY, 22, 10, 5, on ? ACCENT : TOGGLE_OFF);
-            rounded(g, on ? trackX + 12 : trackX + 2, trackY + 1, 8, 8, 4, KNOB);
+        Modules.Module m = r.module();
+        if (m instanceof Modules.ColorModule cm) {
+            rounded(g, b.x() + b.w() - 86, b.y() + 11, 14, 14, 4, cm.argb());
+            g.text(this.font, ">", b.x() + b.w() - 52, b.y() + 13, TEXT_DIM, false);
         }
+        drawToggle(g, b, m.isEnabled());
+    }
+
+    private void drawToggle(GuiGraphicsExtractor g, Box b, boolean on) {
+        int trackX = b.x() + b.w() - 30;
+        int trackY = b.y() + 13;
+        rounded(g, trackX, trackY, 22, 10, 5, on ? ACCENT : TOGGLE_OFF);
+        rounded(g, on ? trackX + 12 : trackX + 2, trackY + 1, 8, 8, 4, KNOB);
+    }
+
+    private void drawChannelRow(GuiGraphicsExtractor g, Row r, int mouseX, int mouseY) {
+        Box b = r.box();
+        g.text(this.font, channelName(r.channel()) + ": " + channelValue(r.channel()),
+                b.x() + 10, b.y() + 13, TEXT, false);
+
+        Box minus = minusBox(b);
+        Box plus = plusBox(b);
+        rounded(g, minus.x(), minus.y(), minus.w(), minus.h(), 6,
+                minus.contains(mouseX, mouseY) ? ROW_HOVER : BUTTON_BG);
+        rounded(g, plus.x(), plus.y(), plus.w(), plus.h(), 6,
+                plus.contains(mouseX, mouseY) ? ROW_HOVER : BUTTON_BG);
+        g.text(this.font, "-", minus.x() + 12, minus.y() + 6, TEXT, false);
+        g.text(this.font, "+", plus.x() + 11, plus.y() + 6, TEXT, false);
+    }
+
+    // Clickable areas inside a row.
+    private static Box editBox(Box b) {
+        return new Box(b.x() + b.w() - 100, b.y(), 68, b.h());
+    }
+
+    private static Box minusBox(Box b) {
+        return new Box(b.x() + b.w() - 70, b.y() + 8, 30, 20);
+    }
+
+    private static Box plusBox(Box b) {
+        return new Box(b.x() + b.w() - 34, b.y() + 8, 30, 20);
     }
 
     @Override
@@ -310,7 +350,7 @@ public class FinderScreen extends Screen {
         for (int i = 0; i < categoryBoxes.size(); i++) {
             if (categoryBoxes.get(i).contains(mx, my)) {
                 selected = i;
-                optimizerOpen = false;
+                editing = null;
                 buildRows();
                 return true;
             }
@@ -321,32 +361,44 @@ public class FinderScreen extends Screen {
                 return true;
             }
         }
-        if (optimizerOpen && backBox.contains(mx, my)) {
-            optimizerOpen = false;
+        if (editing != null && backBox.contains(mx, my)) {
+            editing = null;
             buildRows();
             return true;
         }
 
-        Row hit = null;
         for (Row r : rows) {
-            if (r.box().contains(mx, my)) {
-                hit = r;
-                break;
-            }
-        }
-        if (hit != null) {
-            if (hit.opensOptimizer()) {
-                if (event.button() == 1) { // right click opens the page
-                    optimizerOpen = true;
-                    buildRows();
-                }
-            } else if (hit.module() != null) {
-                hit.module().toggle();
-                Modules.save();
+            if (!r.box().contains(mx, my)) continue;
+            if (r.channel() != '\0') {
+                handleChannelClick(r, mx, my);
+            } else if (r.module() != null) {
+                handleModuleClick(r, mx, my);
             }
             return true;
         }
         return super.mouseClicked(event, doubleClick);
+    }
+
+    private void handleModuleClick(Row r, double mx, double my) {
+        Modules.Module m = r.module();
+        if (m instanceof Modules.ColorModule cm && editBox(r.box()).contains(mx, my)) {
+            editing = cm;
+            buildRows();
+            return;
+        }
+        m.toggle();
+        Modules.save();
+    }
+
+    private void handleChannelClick(Row r, double mx, double my) {
+        if (minusBox(r.box()).contains(mx, my)) {
+            editing.adjust(r.channel(), -CHANNEL_STEP);
+        } else if (plusBox(r.box()).contains(mx, my)) {
+            editing.adjust(r.channel(), CHANNEL_STEP);
+        } else {
+            return;
+        }
+        Modules.save();
     }
 
     @Override
@@ -359,4 +411,4 @@ public class FinderScreen extends Screen {
     public boolean isPauseScreen() {
         return false;
     }
-}
+    }
