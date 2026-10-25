@@ -2,8 +2,6 @@ package com.example.storagefinder;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -15,9 +13,6 @@ import java.util.List;
 import java.util.Properties;
 
 public final class Modules {
-
-    /** Redstone Optimizer switches use this category. They show on that page, not in the sidebar. */
-    public static final String OPTIMIZER_CATEGORY = "Optimizer";
 
     public abstract static class Module {
         private final String name;
@@ -37,6 +32,12 @@ public final class Modules {
 
         /** Called every client tick while the module is enabled. */
         public void tick(Minecraft mc) {}
+
+        /** Saves extra values such as colours. Override to store more. */
+        public void saveExtras(Properties props, String prefix) {}
+
+        /** Loads the values written by saveExtras. */
+        public void loadExtras(Properties props, String prefix) {}
     }
 
     public static final class AutoSprint extends Module {
@@ -52,49 +53,71 @@ public final class Modules {
         }
     }
 
-    /** Leaves a particle trail behind you while you move. Only you can see it. */
-    public static final class Trail extends Module {
-        private int ticks = 0;
+    /** A module with a colour the player picks. The effect is added in a later update. */
+    public static class ColorModule extends Module {
+        private int r;
+        private int g;
+        private int b;
 
-        public Trail() {
-            super("Trail", "Render");
+        public ColorModule(String name, String category, int r, int g, int b) {
+            super(name, category);
+            this.r = clamp(r);
+            this.g = clamp(g);
+            this.b = clamp(b);
+        }
+
+        public int red() { return r; }
+        public int green() { return g; }
+        public int blue() { return b; }
+
+        /** The colour as ARGB with full opacity. */
+        public int argb() { return 0xFF000000 | (r << 16) | (g << 8) | b; }
+
+        /** Changes one channel ('r', 'g' or 'b') by delta, staying between 0 and 255. */
+        public void adjust(char channel, int delta) {
+            switch (channel) {
+                case 'r' -> r = clamp(r + delta);
+                case 'g' -> g = clamp(g + delta);
+                default -> b = clamp(b + delta);
+            }
         }
 
         @Override
-        public void tick(Minecraft mc) {
-            if (mc.player == null || mc.level == null) return;
-            Vec3 motion = mc.player.getDeltaMovement();
-            boolean moving = motion.x * motion.x + motion.z * motion.z > 0.001;
-            if (!moving) return;
-            ticks++;
-            if (ticks % 2 != 0) return;
-            mc.level.addParticle(ParticleTypes.END_ROD,
-                    mc.player.getX(), mc.player.getY() + 0.1, mc.player.getZ(),
-                    0, 0, 0);
+        public void saveExtras(Properties props, String prefix) {
+            props.setProperty(prefix + ".r", Integer.toString(r));
+            props.setProperty(prefix + ".g", Integer.toString(g));
+            props.setProperty(prefix + ".b", Integer.toString(b));
         }
-    }
 
-    /** A Redstone Optimizer switch. Its hiding code will read isEnabled(). */
-    public static final class OptimizerOption extends Module {
-        public OptimizerOption(String name) {
-            super(name, OPTIMIZER_CATEGORY);
+        @Override
+        public void loadExtras(Properties props, String prefix) {
+            r = readChannel(props, prefix + ".r", r);
+            g = readChannel(props, prefix + ".g", g);
+            b = readChannel(props, prefix + ".b", b);
+        }
+
+        private static int clamp(int v) {
+            return Math.max(0, Math.min(255, v));
+        }
+
+        private static int readChannel(Properties props, String key, int fallback) {
+            try {
+                return clamp(Integer.parseInt(props.getProperty(key, Integer.toString(fallback)).trim()));
+            } catch (NumberFormatException e) {
+                return fallback;
+            }
         }
     }
 
     public static final List<Module> ALL = new ArrayList<>();
 
-    public static final OptimizerOption DISABLE_REDSTONE_DUST = new OptimizerOption("Disable Redstone Dust");
-    public static final OptimizerOption HIDE_PISTON = new OptimizerOption("Hide Piston");
-    public static final OptimizerOption HIDE_TNT_EXPLOSION = new OptimizerOption("Hide TNT Explosion");
-    public static final OptimizerOption HIDE_DROPPED_ITEMS = new OptimizerOption("Hide Dropped Items");
+    public static final ColorModule SATURATION_COLOR = new ColorModule("Saturation Color", "Render", 160, 40, 255);
+    public static final ColorModule GLOWING_HAND = new ColorModule("Glowing Hand", "Render", 255, 60, 60);
 
     static {
         ALL.add(new AutoSprint());
-        ALL.add(new Trail());
-        ALL.add(DISABLE_REDSTONE_DUST);
-        ALL.add(HIDE_PISTON);
-        ALL.add(HIDE_TNT_EXPLOSION);
-        ALL.add(HIDE_DROPPED_ITEMS);
+        ALL.add(SATURATION_COLOR);
+        ALL.add(GLOWING_HAND);
     }
 
     private Modules() {}
@@ -117,20 +140,24 @@ public final class Modules {
             return;
         }
         for (Module m : ALL) {
-            String value = props.getProperty(key(m));
+            String prefix = key(m);
+            String value = props.getProperty(prefix);
             if (value != null) m.setEnabled(Boolean.parseBoolean(value));
+            m.loadExtras(props, prefix);
         }
     }
 
     public static void save() {
         Properties props = new Properties();
         for (Module m : ALL) {
-            props.setProperty(key(m), Boolean.toString(m.isEnabled()));
+            String prefix = key(m);
+            props.setProperty(prefix, Boolean.toString(m.isEnabled()));
+            m.saveExtras(props, prefix);
         }
         try (Writer writer = Files.newBufferedWriter(configFile())) {
-            props.store(writer, "Storage Finder settings");
+            props.store(writer, "LuffyEssentials settings");
         } catch (IOException e) {
             // Settings just won't be saved this time.
         }
     }
-}
+                }
